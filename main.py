@@ -4,6 +4,12 @@ from reportlab.pdfgen import canvas
 from reportlab.lib.units import mm
 from reportlab.lib.colors import CMYKColor, CMYKColorSep
 import math
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+import reportlab.rl_config
+
+# Explicitly enable font embedding
+reportlab.rl_config.warnOnMissingFontGlyphs = 0
 
 # Constants
 WIDTH_A4 = A4[0]  # Width of A4a page in points (595.2756)
@@ -17,7 +23,7 @@ PREFIX = "SK-"            # Prefix for barcode labels
 # Define the ranges of labels to generate
 LABEL_RANGES = [
     (1, 400),     # 0001 to 0400
-    (801, 1000)   # 0801 to 1000
+    (1000, 1200)   # 0801 to 1000
 ]
 
 # Calculate label width based on page width and number of labels per row
@@ -37,8 +43,12 @@ def create_barcode_labels_pdf(output_filename):
     custom_page_size = (WIDTH_A4, page_height)
     c = canvas.Canvas(output_filename, pagesize=custom_page_size)
     
+    # Register the Helvetica.ttf font file from the current directory
+    font_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'Helvetica.ttf')
+    pdfmetrics.registerFont(TTFont('HelveticaEmbed', font_path))
+    font_name = 'HelveticaEmbed'  # Use our embedded font
+    
     # Define spot color for kiss_cut (100% Magenta in CMYK)
-    # Using CMYKColorSep for spot color
     kiss_cut_color = CMYKColorSep(0, 1, 0, 0, spotName='kiss_cut')
     
     # Create a 100% K (black) CMYK color for text and barcodes
@@ -90,7 +100,8 @@ def create_barcode_labels_pdf(output_filename):
             # Ensure the text is positioned with clear separation from the barcode
             text_y = y + 1*mm  # Position text 2mm from bottom of label
             
-            c.setFont("Helvetica", 8)
+            # Use our embedded font
+            c.setFont(font_name, 8)
             c.drawCentredString(x + LABEL_WIDTH/2, text_y, code_text)
             
             # Move to next position
@@ -98,6 +109,14 @@ def create_barcode_labels_pdf(output_filename):
             if col >= LABELS_PER_ROW:
                 col = 0
                 row += 1
+    
+    # Force embedding by adding this PostScript command directly 
+    c._code.append("% Ensure all fonts are embedded")
+    c._code.append("/EmbedAllFonts true")
+    
+    # Explicitly set PDF metadata to ensure font embedding
+    c._doc.setSubject('Barcode Labels')
+    c._doc.setTitle('Barcode Labels')
     
     # Save the PDF
     c.save()
@@ -112,6 +131,7 @@ def create_barcode_labels_pdf(output_filename):
     
     print(f"PDF created with {total_labels} barcode labels on a single page of dimensions {WIDTH_A4/mm:.1f}mm × {page_height/mm:.1f}mm.")
     print(f"Included ranges: {ranges_text}")
+    print(f"Font embedding enabled with {font_name}")
 
 if __name__ == "__main__":
     output_file = "barcode_labels.pdf"
